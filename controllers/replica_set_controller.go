@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"os"
+	"time"
 
 	"github.com/imdario/mergo"
 	"github.com/stretchr/objx"
@@ -61,6 +64,8 @@ const (
 
 	lastSuccessfulConfiguration = "mongodb.com/v1.lastSuccessfulConfiguration"
 	lastAppliedMongoDBVersion   = "mongodb.com/v1.lastAppliedMongoDBVersion"
+	// The wait time limit for pod upgrade.
+	waitLimit = 2 * 60 * 60
 )
 
 func init() {
@@ -485,7 +490,13 @@ func (r *ReplicaSetReconciler) createOrUpdateStatefulSet(mdb mdbv1.MongoDBCommun
 		name.Name = name.Name + "-arb"
 	}
 
-	err := r.client.Get(context.TODO(), name, &set)
+	//err := r.client.Get(context.TODO(), name, &set)
+	//err = k8sClient.IgnoreNotFound(err)
+	//if err != nil {
+	//	return errors.Errorf("error getting StatefulSet: %s", err)
+	//}
+
+	currentSts, err := r.client.GetStatefulSet(mdb.NamespacedName())
 	err = k8sClient.IgnoreNotFound(err)
 	if err != nil {
 		return errors.Errorf("error getting StatefulSet: %s", err)
@@ -494,6 +505,38 @@ func (r *ReplicaSetReconciler) createOrUpdateStatefulSet(mdb mdbv1.MongoDBCommun
 	buildStatefulSetModificationFunction(mdb)(&set)
 	if isArbiter {
 		buildArbitersModificationFunction(mdb)(&set)
+	}
+
+	if currentSts.Spec.VolumeClaimTemplates != nil && mdb.Spec.StatefulSetConfiguration.SpecWrapper.Spec.VolumeClaimTemplates != nil {
+		oldStorage := currentSts.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.DeepCopy()
+		newStorage := mdb.Spec.StatefulSetConfiguration.SpecWrapper.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
+		if canExpandPVC(oldStorage, newStorage) {
+			zap.S().Info("canExpandPVC true")
+			// delete sts
+			if err := r.client.Delete(context.TODO(), &set); err != nil {
+				zap.S().Error("recreate sts error，", err)
+				return err
+			}
+
+			// todo make sure sts and pods are deleted , then expand pvc
+
+			// expand pvc
+			if err := r.doExpandPVC(context.TODO(), set); err != nil {
+				zap.S().Error("doExpandPVC error，", err)
+				return err
+			}
+
+			// ResourceVersion 设置为 ”“  否则报错
+			set.ObjectMeta.ResourceVersion = ""
+			// build sts , recreate sts
+			if err := r.client.Create(context.TODO(), &set); err != nil {
+				zap.S().Error("recreate sts error，", err)
+				return err
+			} else {
+				return nil
+			}
+
+		}
 	}
 
 	if _, err = statefulset.CreateOrUpdate(r.client, set); err != nil {
@@ -741,4 +784,101 @@ func getDomain(service, namespace, clusterName string) string {
 // if this is not the case, then we should ensure to skip past the annotation check otherwise the pods will remain in pending state forever.
 func isPreReadinessInitContainerStatefulSet(sts appsv1.StatefulSet) bool {
 	return container.GetByName(construct.ReadinessProbeContainerName, sts.Spec.Template.Spec.InitContainers) == nil
+}
+
+func canExpandPVC(oldStorage corev1.ResourceList, newStorage *resource.Quantity) bool {
+	zap.S().Info("oldRequest: ", oldStorage.Storage(), ",newStorage: ", newStorage)
+	if newStorage.Cmp(*oldStorage.Storage()) != 1 {
+		zap.S().Info("Can not expand, new pvc is not larger than old pvc")
+		return false
+	}
+	return true
+}
+
+func (r *ReplicaSetReconciler) doExpandPVC(ctx context.Context, sts appsv1.StatefulSet) error {
+	pvcs := corev1.PersistentVolumeClaimList{}
+	// todo 当前仅根据 namespace 获取 pvc , 后续需要支持根据 selector 、 name 等
+	// todo 后续仅支持修改 data-volume ， 过滤掉 logs-volume， 目前全都修改
+	if err := r.client.List(ctx,
+		&pvcs,
+		&k8sClient.ListOptions{
+			Namespace: sts.Namespace,
+		},
+	); err != nil {
+		return err
+	}
+
+	for _, item := range pvcs.Items {
+		name := item.Name
+		zap.S().Info("expand PVC【", name, "】 start")
+		item.Spec.Resources.Requests = sts.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests
+		if err := r.client.Update(ctx, &item); err != nil {
+			return err
+		}
+		if err := retry(time.Second*2, time.Duration(waitLimit)*time.Second, func() (bool, error) {
+			// Check the pvc status.
+			var currentPVC corev1.PersistentVolumeClaim
+			if err2 := r.client.Get(ctx, k8sClient.ObjectKeyFromObject(&item), &currentPVC); err2 != nil {
+				return true, err2
+			}
+			var conditons = currentPVC.Status.Conditions
+			capacity := currentPVC.Status.Capacity
+			// Notice: When expanding not start, or been completed, conditons is nil
+			if conditons == nil {
+				// If change storage request when replicas are creating, should check the currentPVC.Status.Capacity.
+				// for example:
+				// Pod0 has created successful,but Pod1 is creating. then change PVC from 20Gi to 30Gi .
+				// Pod0's PVC need to expand, but Pod1's PVC has created as 30Gi, so need to skip it.
+
+				if equality.Semantic.DeepEqual(capacity, item.Spec.Resources.Requests) {
+					zap.S().Info("Executing expand PVC【", name, "】 completed")
+					return true, nil
+				}
+				zap.S().Info("Executing expand PVC【", name, "】 not start")
+				return false, nil
+			}
+			status := conditons[0].Type
+			zap.S().Info("Executing expand PVC【", name, "】, storage 【", capacity.Storage(), "】, status 【", status, "】")
+			if status == "FileSystemResizePending" {
+				return true, nil
+			}
+			return false, nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// retry runs func "f" every "in" time until "limit" is reached.
+// it also doesn't have an extra tail wait after the limit is reached
+// and f func runs first time instantly
+func retry(in, limit time.Duration, f func() (bool, error)) error {
+	fdone, err := f()
+	if err != nil {
+		return err
+	}
+	if fdone {
+		return nil
+	}
+
+	done := time.NewTimer(limit)
+	defer done.Stop()
+	tk := time.NewTicker(in)
+	defer tk.Stop()
+
+	for {
+		select {
+		case <-done.C:
+			return fmt.Errorf("reach pod wait limit")
+		case <-tk.C:
+			fdone, err := f()
+			if err != nil {
+				return err
+			}
+			if fdone {
+				return nil
+			}
+		}
+	}
 }

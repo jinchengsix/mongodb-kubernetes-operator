@@ -2,27 +2,85 @@
 apiVersion: mongodbcommunity.mongodb.com/v1
 kind: MongoDBCommunity
 metadata:
-  name: example-mongodb
+  name: mongodb
 spec:
   members: 3
   type: ReplicaSet
-  version: "4.2.6"
+  version: "4.0.3"
   security:
     authentication:
       modes: ["SCRAM"]
   users:
-    - name: my-user
+    - name: shuaib
       db: admin
       passwordSecretRef: # a reference to the secret that will be used to generate the user's password
         name: my-user-password
       roles:
-        - name: clusterAdmin
-          db: admin
-        - name: userAdminAnyDatabase
+        - name: root
           db: admin
       scramCredentialsSecretName: my-scram
+
   additionalMongodConfig:
+    net.port: 27018
     storage.wiredTiger.engineConfig.journalCompressor: zlib
+
+  statefulSet:
+    spec:
+      template:
+        spec:
+          initContainers:
+            - name: mongod-posthook
+              image: quay.io/mongodb/mongodb-kubernetes-operator-version-upgrade-post-start-hook:1.0.4
+#              imagePullSecrets:
+#                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+            - name: mongodb-agent-readinessprobe
+              image: quay.io/mongodb/mongodb-kubernetes-readinessprobe:1.0.8
+#              imagePullSecrets:
+#                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+          containers:
+            - name: mongod
+              image: mongo:4.0.3
+              imagePullSecrets:
+                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: "8"
+                  memory: 16G
+                requests:
+                  cpu: "8"
+                  memory: 16G
+            - name: mongodb-agent
+              image: quay.io/mongodb/mongodb-agent:11.12.0.7388-1
+#              imagePullSecrets:
+#                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: "0.2"
+                  memory: 250M
+                requests:
+                  cpu: "0.2"
+                  memory: 200M
+      volumeClaimTemplates:
+        - metadata:
+            name: data-volume
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 20Gi
+        - metadata:
+            name: logs-volume
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 20Gi
 
 # the user credentials will be generated from this secret
 # once the credentials are generated, this secret is no longer required
@@ -33,4 +91,4 @@ metadata:
   name: my-user-password
 type: Opaque
 stringData:
-  password: <your-password-here>
+  password: echo1106

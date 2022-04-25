@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/imdario/mergo"
@@ -65,7 +66,8 @@ const (
 	lastSuccessfulConfiguration = "mongodb.com/v1.lastSuccessfulConfiguration"
 	lastAppliedMongoDBVersion   = "mongodb.com/v1.lastAppliedMongoDBVersion"
 	// The wait time limit for pod upgrade.
-	waitLimit = 2 * 60 * 60
+	waitLimit  = 2 * 60 * 60
+	logsVolume = "logs"
 )
 
 func init() {
@@ -810,6 +812,10 @@ func (r *ReplicaSetReconciler) doExpandPVC(ctx context.Context, sts appsv1.State
 
 	for _, item := range pvcs.Items {
 		name := item.Name
+		if strings.HasPrefix(name, logsVolume) {
+			// filter logs-volume
+			continue
+		}
 		zap.S().Info("expand PVC【", name, "】 start")
 		item.Spec.Resources.Requests = sts.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests
 		if err := r.client.Update(ctx, &item); err != nil {

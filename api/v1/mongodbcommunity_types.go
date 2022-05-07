@@ -210,7 +210,7 @@ func (c CustomRole) ConvertToAutomationConfigCustomRole() automationconfig.Custo
 // ConvertCustomRolesToAutomationConfigCustomRole converts custom roles to custom roles
 // that can be used in the automation config.
 func ConvertCustomRolesToAutomationConfigCustomRole(roles []CustomRole) []automationconfig.CustomRole {
-	acRoles := []automationconfig.CustomRole{}
+	var acRoles []automationconfig.CustomRole
 	for _, role := range roles {
 		acRoles = append(acRoles, role.ConvertToAutomationConfigCustomRole())
 	}

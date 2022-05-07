@@ -486,12 +486,12 @@ func (r *ReplicaSetReconciler) ensureService(mdb mdbv1.MongoDBCommunity, isArbit
 
 func (r *ReplicaSetReconciler) createOrUpdateStatefulSet(mdb mdbv1.MongoDBCommunity, isArbiter bool) error {
 	set := appsv1.StatefulSet{}
-
+	//pvcChanged := mdbv1.PVCChangedConfiguration{}
 	name := mdb.NamespacedName()
 	if isArbiter {
 		name.Name = name.Name + "-arb"
 	}
-
+	//pvcChanged.
 	//err := r.client.Get(context.TODO(), name, &set)
 	//err = k8sClient.IgnoreNotFound(err)
 	//if err != nil {
@@ -510,17 +510,15 @@ func (r *ReplicaSetReconciler) createOrUpdateStatefulSet(mdb mdbv1.MongoDBCommun
 	}
 
 	if currentSts.Spec.VolumeClaimTemplates != nil && mdb.Spec.StatefulSetConfiguration.SpecWrapper.Spec.VolumeClaimTemplates != nil {
-		oldStorage := currentSts.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.DeepCopy()
-		newStorage := mdb.Spec.StatefulSetConfiguration.SpecWrapper.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
-		if canExpandPVC(oldStorage, newStorage) {
+		oldDataStorage := currentSts.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.DeepCopy()
+		newDataStorage := mdb.Spec.StatefulSetConfiguration.SpecWrapper.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
+		if canExpandPVC(oldDataStorage, newDataStorage) {
 			zap.S().Info("canExpandPVC true")
 			// delete sts
 			if err := r.client.Delete(context.TODO(), &set); err != nil {
 				zap.S().Error("recreate sts error，", err)
 				return err
 			}
-
-			// todo make sure sts and pods are deleted , then expand pvc
 
 			// expand pvc
 			if err := r.doExpandPVC(context.TODO(), set); err != nil {
@@ -788,19 +786,21 @@ func isPreReadinessInitContainerStatefulSet(sts appsv1.StatefulSet) bool {
 	return container.GetByName(construct.ReadinessProbeContainerName, sts.Spec.Template.Spec.InitContainers) == nil
 }
 
-func canExpandPVC(oldStorage corev1.ResourceList, newStorage *resource.Quantity) bool {
-	zap.S().Info("oldRequest: ", oldStorage.Storage(), ",newStorage: ", newStorage)
-	if newStorage.Cmp(*oldStorage.Storage()) != 1 {
+func canExpandPVC(oldDataStorage corev1.ResourceList, newDataStorage *resource.Quantity) bool {
+	zap.S().Info("oldDataStorage: ", oldDataStorage.Storage(), ",newDataStorage: ", newDataStorage)
+	var dataChanged bool
+	dataChanged = true
+	if newDataStorage.Cmp(*oldDataStorage.Storage()) != 1 {
 		zap.S().Info("Can not expand, new pvc is not larger than old pvc")
-		return false
+		dataChanged = false
 	}
-	return true
+
+	return dataChanged
 }
 
 func (r *ReplicaSetReconciler) doExpandPVC(ctx context.Context, sts appsv1.StatefulSet) error {
 	pvcs := corev1.PersistentVolumeClaimList{}
 	// todo 当前仅根据 namespace 获取 pvc , 后续需要支持根据 selector 、 name 等
-	// todo 后续仅支持修改 data-volume ， 过滤掉 logs-volume， 目前全都修改
 	if err := r.client.List(ctx,
 		&pvcs,
 		&k8sClient.ListOptions{
@@ -813,6 +813,7 @@ func (r *ReplicaSetReconciler) doExpandPVC(ctx context.Context, sts appsv1.State
 	for _, item := range pvcs.Items {
 		name := item.Name
 		if strings.HasPrefix(name, logsVolume) {
+			// todo 后续支持选择修改 data-volume 或者 logs-volume， 目前仅修改 data-volume
 			// filter logs-volume
 			continue
 		}

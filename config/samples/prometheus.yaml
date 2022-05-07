@@ -1,0 +1,150 @@
+---
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: example-prometheus
+spec:
+  members: 3
+  type: ReplicaSet
+  version: "4.0.3"
+
+  # You can expose metrics for Prometheus polling using the
+  # `prometheus` entry.
+  prometheus:
+    # Metrics endpoint HTTP Basic Auth username
+    username: promethus-user
+
+    # Metrics endpoint HTTP Basic Auth password
+    passwordSecretRef:
+      name: metrics-endpoint-password
+
+    # Optional, defaults to `/metrics`
+    # metricsPath: /metrics
+
+    # Optional defaults to 9216
+    # port: 9216
+
+    # Prometheus endpoint can be configured to use HTTPS
+    # tlsSecretKeyRef:
+    #   name: "<kubernetes.io/tls secret name>"
+
+  security:
+    authentication:
+      modes: ["SCRAM"]
+
+  users:
+    - name: shuaib
+      db: admin
+      passwordSecretRef:
+        name: my-user-password
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: my-scram
+
+  statefulSet:
+    spec:
+      template:
+        spec:
+          initContainers:
+            - name: mongod-posthook
+#              image: quay.io/mongodb/mongodb-kubernetes-operator-version-upgrade-post-start-hook:1.0.4
+              #              imagePullSecrets:
+              #                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+            - name: mongodb-agent-readinessprobe
+#              image: quay.io/mongodb/mongodb-kubernetes-readinessprobe:1.0.8
+              #              imagePullSecrets:
+              #                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+          containers:
+            - name: mongod
+#              image: mongo:4.0.3
+#              imagePullSecrets:
+#                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: "8"
+                  memory: 16G
+                requests:
+                  cpu: "2"
+                  memory: 2G
+            - name: mongodb-agent
+#              image: quay.io/mongodb/mongodb-agent:11.12.0.7388-1
+              #              imagePullSecrets:
+              #                - name: docker-register-qingcloud
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: "0.2"
+                  memory: 250M
+                requests:
+                  cpu: "0.2"
+                  memory: 200M
+# the user credentials will be generated from this secret
+# once the credentials are generated, this secret is no longer required
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-user-password
+type: Opaque
+stringData:
+  password: echo1106
+
+# Secret holding the prometheus metrics endpoint HTTP Password.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: metrics-endpoint-password
+type: Opaque
+stringData:
+  password: promethus-pass
+#---
+#apiVersion: monitoring.coreos.com/v1
+#kind: ServiceMonitor
+#metadata:
+#  annotations:
+#
+#  # This needs to match `spec.ServiceMonitorSelector.matchLabels` from your
+#  # `prometheuses.monitoring.coreos.com` resouce.
+#  labels:
+#    release: prometheus
+#
+#  name: mongodb-sm
+#  namespace: mongodb
+#spec:
+#  endpoints:
+#
+#    # Configuring a Prometheus Endpoint with basic Auth.
+#    # `prom-secret` is a Secret containing a `username` and `password` entries.
+#    - basicAuth:
+#        password:
+#          key: password
+#          name: metrics-endpoint-password
+#        username:
+#          key: username
+#          name: metrics-endpoint-password
+#
+#      # This port matches what we created in our MongoDB Service.
+#      port: prometheus
+#
+#      # If using HTTPS enabled endpoint, change scheme to https
+#      scheme: http
+#
+#      # Configure different TLS related settings. For more information, see:
+#      # https://github.com/prometheus-operator/prometheus-operator/blob/main/pkg/apis/monitoring/v1/types.go#L909
+#      # tlsConfig:
+#      #    insecureSkipVerify: true
+#
+#  # What namespace to watch
+#  namespaceSelector:
+#    matchNames:
+#      - mongodb
+#
+#  # Service labels to match
+#  selector:
+#    matchLabels:
+#      app: mongodb-svc

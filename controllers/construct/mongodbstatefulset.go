@@ -264,7 +264,7 @@ func logsPvc(logsVolumeName string) persistentvolumeclaim.Modification {
 	return persistentvolumeclaim.Apply(
 		persistentvolumeclaim.WithName(logsVolumeName),
 		persistentvolumeclaim.WithAccessModes(corev1.ReadWriteOnce),
-		persistentvolumeclaim.WithResourceRequests(resourcerequirements.BuildStorageRequirements("2G")),
+		persistentvolumeclaim.WithResourceRequests(resourcerequirements.BuildStorageRequirements("20G")),
 	)
 }
 

@@ -151,6 +151,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("error validating new Spec: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -160,6 +161,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error ensuring the service (members) exists: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -169,6 +171,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error ensuring the service (arbiters) exists: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -178,6 +181,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error validating TLS config: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -186,6 +190,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Info, "TLS config is not yet valid, retrying in 10 seconds").
+				withDmpState(mdbv1.Pending).
 				withPendingPhase(10),
 		)
 	}
@@ -194,6 +199,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error ensuring TLS resources: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -202,6 +208,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error ensuring TLS resources: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -210,6 +217,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error ensuring User config: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -219,6 +227,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error deploying MongoDB ReplicaSet: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -227,6 +236,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Info, "ReplicaSet is not yet ready, retrying in 10 seconds").
+				withDmpState(mdbv1.Pending).
 				withPendingPhase(10),
 		)
 	}
@@ -236,6 +246,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error resetting StatefulSet UpdateStrategyType: %s", err)).
+				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
 	}
@@ -248,6 +259,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 			withStatefulSetReplicas(mdb.StatefulSetReplicasThisReconciliation()).
 			withStatefulSetArbiters(mdb.StatefulSetArbitersThisReconciliation()).
 			withMongoDBArbiters(mdb.AutomationConfigArbitersThisReconciliation()).
+			withDmpState(mdbv1.Pending).
 			withPendingPhase(10),
 		)
 	}
@@ -260,6 +272,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 			withStatefulSetArbiters(mdb.StatefulSetArbitersThisReconciliation()).
 			withMongoDBArbiters(mdb.AutomationConfigArbitersThisReconciliation()).
 			withMessage(None, "").
+			withDmpState(mdbv1.Running).
 			withRunningPhase().
 			withVersion(mdb.GetMongoDBVersion()),
 	)

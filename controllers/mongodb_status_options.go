@@ -194,6 +194,26 @@ func (p phaseOption) GetResult() (reconcile.Result, error) {
 	return result.OK()
 }
 
+func (o *optionBuilder) withDmpState(p mdbv1.Phase) *optionBuilder {
+	o.options = append(o.options,
+		dmpStateOption{
+			state: p,
+		})
+	return o
+}
+
+type dmpStateOption struct {
+	state mdbv1.Phase
+}
+
+func (d dmpStateOption) ApplyOption(mdb *mdbv1.MongoDBCommunity) {
+	mdb.Status.State = d.state
+}
+
+func (d dmpStateOption) GetResult() (reconcile.Result, error) {
+	return result.OK()
+}
+
 type mongoDBReplicasOption struct {
 	mongoDBMembers int
 }

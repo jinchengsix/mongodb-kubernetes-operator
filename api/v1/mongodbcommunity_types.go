@@ -474,6 +474,7 @@ type MongoDBCommunityStatus struct {
 	MongoURI string `json:"mongoUri"`
 	Phase    Phase  `json:"phase"`
 	Version  string `json:"version,omitempty"`
+	State    Phase  `json:"state"`
 
 	CurrentStatefulSetReplicas int `json:"currentStatefulSetReplicas"`
 	CurrentMongoDBMembers      int `json:"currentMongoDBMembers"`

@@ -55,7 +55,7 @@ spec:
           value: mongo
         - name: MONGODB_REPO_URL
           value: dockerhub.qingcloud.com/mongodb_op
-        image: dockerhub.qingcloud.com/mongodb_op/mongodb-kubernetes-operator:0.7.3
+        image: dockerhub.qingcloud.com/mongodb_op/mongodb-kubernetes-operator:latest
         imagePullPolicy: IfNotPresent
         name: mongodb-kubernetes-operator
         resources:

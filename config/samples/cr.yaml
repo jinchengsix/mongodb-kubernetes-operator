@@ -4,9 +4,9 @@ kind: MongoDBCommunity
 metadata:
   name: mongodb
 spec:
-  members: 1
+  members: 3
   type: ReplicaSet
-  version: "5.0.8"
+  version: "4.2.19"
   security:
     authentication:
       modes: ["SCRAM"]

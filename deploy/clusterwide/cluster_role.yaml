@@ -33,6 +33,7 @@ rules:
   - ""
   resources:
   - pods
+  - persistentvolumeclaims
   verbs:
   - delete
   - get

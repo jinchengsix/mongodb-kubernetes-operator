@@ -9,6 +9,7 @@ rules:
   - services
   - configmaps
   - secrets
+  - serviceaccounts
   verbs:
   - create
   - delete
@@ -54,3 +55,12 @@ rules:
   - list
   - update
   - watch
+- apiGroups:
+    - rbac.authorization.k8s.io/v1
+  resources:
+    - roles
+    - rolebindings
+  verbs:
+    - get
+    - list
+    - create

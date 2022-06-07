@@ -46,16 +46,16 @@ spec:
         - name: OPERATOR_NAME
           value: mongodb-kubernetes-operator
         - name: AGENT_IMAGE
-          value: dockerhub.qingcloud.com/mongodb_op/mongodb-agent:11.12.0.7388-1
+          value: docker.io/jinchengsix/mongodb-agent:11.12.0.7388-1
         - name: VERSION_UPGRADE_HOOK_IMAGE
-          value: dockerhub.qingcloud.com/mongodb_op/mongodb-kubernetes-operator-version-upgrade-post-start-hook:1.0.4
+          value: docker.io/jinchengsix/version-hook:1.0.4
         - name: READINESS_PROBE_IMAGE
-          value: dockerhub.qingcloud.com/mongodb_op/mongodb-kubernetes-readinessprobe:1.0.8
+          value: docker.io/jinchengsix/readiness-probe:1.0.8
         - name: MONGODB_IMAGE
-          value: mongo
+          value: mongodb
         - name: MONGODB_REPO_URL
-          value: dockerhub.qingcloud.com/mongodb_op
-        image: dockerhub.qingcloud.com/mongodb_op/mongodb-kubernetes-operator:latest
+          value: docker.io/jinchengsix
+        image: docker.io/jinchengsix/mongodb-kubernetes-operator:latest
         imagePullPolicy: IfNotPresent
         name: mongodb-kubernetes-operator
         resources:
@@ -72,5 +72,3 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: mongodb-kubernetes-operator
-      imagePullSecrets:
-        - name: dockerhub

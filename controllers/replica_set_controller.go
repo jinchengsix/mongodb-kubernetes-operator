@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"os"
@@ -119,6 +120,8 @@ type ReplicaSetReconciler struct {
 // +kubebuilder:rbac:groups=mongodbcommunity.mongodb.com,resources=mongodbcommunity/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;create
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;create
 
 // Reconcile reads that state of the cluster for a MongoDB object and makes changes based on the state read
 // and what is in the MongoDB.Spec
@@ -217,6 +220,15 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
 				withMessage(Error, fmt.Sprintf("Error ensuring User config: %s", err)).
+				withDmpState(mdbv1.Failed).
+				withFailedPhase(),
+		)
+	}
+
+	if err := r.ensurePodRBAC(mdb); err != nil {
+		return status.Update(r.client.Status(), &mdb,
+			statusOptions().
+				withMessage(Error, fmt.Sprintf("Error ensuring pod RBAC: %s", err)).
 				withDmpState(mdbv1.Failed).
 				withFailedPhase(),
 		)
@@ -455,6 +467,64 @@ func (r *ReplicaSetReconciler) shouldRunInOrder(mdb mdbv1.MongoDBCommunity) bool
 	}
 
 	return true
+}
+
+func (r *ReplicaSetReconciler) ensurePodRBAC(mdb mdbv1.MongoDBCommunity) error {
+	objectKey := k8sClient.ObjectKey{Name: fmt.Sprintf("%s-%s", mdb.Name, construct.MongodbDatabaseServiceAccountName), Namespace: mdb.Namespace}
+
+	_, err := r.client.GetServiceAccount(objectKey)
+	if err != nil && !apiErrors.IsNotFound(err) {
+		return err
+	}
+	if err != nil {
+		sa := corev1.ServiceAccount{}
+		sa.Name = objectKey.Name
+		sa.Namespace = objectKey.Namespace
+		sa.OwnerReferences = mdb.GetOwnerReferences()
+		if err = r.client.CreateServiceAccount(sa); err != nil {
+			return err
+		}
+	}
+
+	_, err = r.client.GetRole(objectKey)
+	if err != nil && !apiErrors.IsNotFound(err) {
+		return err
+	}
+	if err != nil {
+		role := rbacv1.Role{}
+		role.Name = objectKey.Name
+		role.Namespace = objectKey.Namespace
+		role.OwnerReferences = mdb.GetOwnerReferences()
+
+		role.Rules = append(role.Rules, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get"}})
+		role.Rules = append(role.Rules, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "patch", "delete"}})
+		if err = r.client.CreateRole(role); err != nil {
+			return err
+		}
+	}
+
+	_, err = r.client.GetRoleBinding(objectKey)
+	if err != nil && !apiErrors.IsNotFound(err) {
+		return err
+	}
+	if err != nil {
+		rb := rbacv1.RoleBinding{}
+		rb.Name = objectKey.Name
+		rb.Namespace = objectKey.Namespace
+		rb.OwnerReferences = mdb.GetOwnerReferences()
+
+		rb.RoleRef.APIGroup = "rbac.authorization.k8s.io"
+		rb.RoleRef.Kind = "Role"
+		rb.RoleRef.Name = objectKey.Name
+
+		rb.Subjects = append(rb.Subjects, rbacv1.Subject{Kind: "ServiceAccount", Name: objectKey.Name})
+
+		if err = r.client.CreateRoleBinding(rb); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // deployMongoDBReplicaSet will ensure that both the AutomationConfig secret and backing StatefulSet

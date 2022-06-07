@@ -30,7 +30,7 @@ const (
 	readinessProbePath                = "/opt/scripts/readinessprobe"
 	agentHealthStatusFilePathEnv      = "AGENT_STATUS_FILEPATH"
 	clusterFilePath                   = "/var/lib/automation/config/cluster-config.json"
-	mongodbDatabaseServiceAccountName = "mongodb-database"
+	MongodbDatabaseServiceAccountName = "mongodb-database"
 	agentHealthStatusFilePathValue    = "/var/log/mongodb-mms-automation/healthstatus/agent-health-status.json"
 
 	MongodbRepoUrl = "MONGODB_REPO_URL"
@@ -176,7 +176,7 @@ func BuildMongoDBReplicaSetStatefulSetModificationFunction(mdb MongoDBStatefulSe
 				automationConfigVolumeFunc,
 				podtemplatespec.WithVolume(scriptsVolume),
 				podtemplatespec.WithVolume(keyFileVolume),
-				podtemplatespec.WithServiceAccount(mongodbDatabaseServiceAccountName),
+				podtemplatespec.WithServiceAccount(fmt.Sprintf("%s-%s", mdb.GetName(), MongodbDatabaseServiceAccountName)),
 				podtemplatespec.WithContainer(AgentName, mongodbAgentContainer(mdb.AutomationConfigSecretName(), mongodbAgentVolumeMounts)),
 				podtemplatespec.WithContainer(MongodbName, mongodbContainer(mdb.GetMongoDBVersion(), mongodVolumeMounts, mdb.GetMongodConfiguration())),
 				podtemplatespec.WithInitContainer(versionUpgradeHookName, versionUpgradeHookInit([]corev1.VolumeMount{hooksVolumeMount})),

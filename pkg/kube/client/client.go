@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"github.com/mongodb/mongodb-kubernetes-operator/pkg/kube/rbac"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/kube/pod"
 
@@ -32,6 +34,7 @@ type Client interface {
 	service.GetUpdateCreateDeleter
 	statefulset.GetUpdateCreateDeleter
 	pod.Getter
+	rbac.RBAC
 }
 
 type KubernetesSecretClient interface {
@@ -185,4 +188,46 @@ func (c client) DeleteStatefulSet(objectKey k8sClient.ObjectKey) error {
 		},
 	}
 	return c.Delete(context.TODO(), &sts)
+}
+
+// GetServiceAccount provides a thin wrapper and client.Client to access corev1.ServiceAccount types
+func (c client) GetServiceAccount(objectKey k8sClient.ObjectKey) (corev1.ServiceAccount, error) {
+	sa := corev1.ServiceAccount{}
+	if err := c.Get(context.TODO(), objectKey, &sa); err != nil {
+		return corev1.ServiceAccount{}, err
+	}
+	return sa, nil
+}
+
+// CreateServiceAccount provides a thin wrapper and client.Client to create corev1.ServiceAccount types
+func (c client) CreateServiceAccount(sa corev1.ServiceAccount) error {
+	return c.Create(context.TODO(), &sa)
+}
+
+// GetRole provides a thin wrapper and client.Client to access rbacv1.Role types
+func (c client) GetRole(objectKey k8sClient.ObjectKey) (rbacv1.Role, error) {
+	role := rbacv1.Role{}
+	if err := c.Get(context.TODO(), objectKey, &role); err != nil {
+		return rbacv1.Role{}, err
+	}
+	return role, nil
+}
+
+// CreateRole provides a thin wrapper and client.Client to create rbacv1.Role types
+func (c client) CreateRole(role rbacv1.Role) error {
+	return c.Create(context.TODO(), &role)
+}
+
+// GetRoleBinding provides a thin wrapper and client.Client to access rbacv1.RoleBinding types
+func (c client) GetRoleBinding(objectKey k8sClient.ObjectKey) (rbacv1.RoleBinding, error) {
+	rb := rbacv1.RoleBinding{}
+	if err := c.Get(context.TODO(), objectKey, &rb); err != nil {
+		return rbacv1.RoleBinding{}, err
+	}
+	return rb, nil
+}
+
+// CreateRoleBinding provides a thin wrapper and client.Client to create rbacv1.RoleBinding types
+func (c client) CreateRoleBinding(rb rbacv1.RoleBinding) error {
+	return c.Create(context.TODO(), &rb)
 }

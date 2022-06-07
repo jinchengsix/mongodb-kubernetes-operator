@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mongodb/mongodb-kubernetes-operator/pkg/kube/secret"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"os"
@@ -338,18 +339,36 @@ func (r *ReplicaSetReconciler) ensureTLSResources(mdb mdbv1.MongoDBCommunity) er
 // ensurePrometheusTLSResources creates any required TLS resources that the MongoDBCommunity
 // requires for TLS configuration.
 func (r *ReplicaSetReconciler) ensurePrometheusTLSResources(mdb mdbv1.MongoDBCommunity) error {
-	if mdb.Spec.Prometheus == nil || mdb.Spec.Prometheus.TLSSecretRef.Name == "" {
+	if mdb.Spec.Prometheus == nil {
 		return nil
 	}
 
-	// the TLS secret needs to be created beforehand, as both the StatefulSet and AutomationConfig
-	// require the contents.
-	r.log.Infof("Prometheus TLS is enabled, creating/updating TLS secret")
-	if err := ensurePrometheusTLSSecret(r.client, mdb); err != nil {
-		return errors.Errorf("could not ensure TLS secret: %s", err)
+	if mdb.Spec.Prometheus.TLSSecretRef.Name == "" {
+		return ensurePrometheusResources(r.client, mdb)
+	} else {
+		// the TLS secret needs to be created beforehand, as both the StatefulSet and AutomationConfig
+		// require the contents.
+		r.log.Infof("Prometheus TLS is enabled, creating/updating TLS secret")
+		if err := ensurePrometheusTLSSecret(r.client, mdb); err != nil {
+			return errors.Errorf("could not ensure TLS secret: %s", err)
+		}
 	}
 
 	return nil
+}
+
+// ensurePrometheusTLSResources creates any required TLS resources that the MongoDBCommunity
+// requires for TLS configuration.
+func ensurePrometheusResources(getUpdateCreator secret.GetUpdateCreator, mdb mdbv1.MongoDBCommunity) error {
+	//todo if exist ,return
+	operatorSecret := secret.Builder().
+		SetName(mdb.Spec.Prometheus.PasswordSecretRef.Name).
+		SetNamespace(mdb.Namespace).
+		SetField("password", "prometheus").
+		SetOwnerReferences(mdb.GetOwnerReferences()).
+		Build()
+
+	return secret.CreateOrUpdate(getUpdateCreator, operatorSecret)
 }
 
 // deployStatefulSet deploys the backing StatefulSet of the MongoDBCommunity resource.
@@ -360,6 +379,7 @@ func (r *ReplicaSetReconciler) ensurePrometheusTLSResources(mdb mdbv1.MongoDBCom
 // The returned boolean indicates that the StatefulSet is ready.
 func (r *ReplicaSetReconciler) deployStatefulSet(mdb mdbv1.MongoDBCommunity) (bool, error) {
 	r.log.Info("Creating/Updating StatefulSet")
+
 	if err := r.createOrUpdateStatefulSet(mdb, false); err != nil {
 		return false, errors.Errorf("error creating/updating StatefulSet: %s", err)
 	}
@@ -499,6 +519,7 @@ func (r *ReplicaSetReconciler) ensureService(mdb mdbv1.MongoDBCommunity, isArbit
 
 func (r *ReplicaSetReconciler) createOrUpdateStatefulSet(mdb mdbv1.MongoDBCommunity, isArbiter bool) error {
 	set := appsv1.StatefulSet{}
+
 	//pvcChanged := mdbv1.PVCChangedConfiguration{}
 	name := mdb.NamespacedName()
 	if isArbiter {

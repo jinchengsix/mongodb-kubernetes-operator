@@ -38,14 +38,47 @@ spec:
           db: admin
       scramCredentialsSecretName: my-scram
 
+    - name: shuaib
+      db: admin
+      passwordSecretRef: # a reference to the secret that will be used to generate the user's password
+        name: shuaib-ref
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: my-scram-test
+
   additionalMongodConfig:
+    net:
+      port: 27017
+      maxIncomingConnections: 10000
     storage:
       wiredTiger:
         engineConfig:
           journalCompressor: zlib  # 数据压缩算法，不可更改
-#          cacheSizeGB: 1   # WiredTiger 内存，可修改，建议值: mongod 内存的 65%
-#    replication:
-#      oplogSizeMB: 30480 # oplogSize 可修改，建议值: 磁盘大小的 5%
+    replication:
+      oplogSizeMB: 20480 # oplogSize 可修改，建议值: 磁盘大小的 5%
+      enableMajorityReadConcern: true
+    operationProfiling:
+      mode: "off"
+      slowOpThresholdMs: 100
+    systemLog:
+      destination: file
+      path: /data/mongod.log
+      logAppend: true
+      logRotate: reopen
+      component:
+        command:
+          verbosity: 0
+        index:
+          verbosity: 0
+        query:
+          verbosity: 0
+        network:
+          verbosity: 0
+        write:
+          verbosity: 0
+    setParameter:
+      cursorTimeoutMillis: 700000
 
   statefulSet:
     spec:
@@ -77,15 +110,16 @@ spec:
                   memory: 200M
           imagePullSecrets:
             - name: dockerhub  # 自定义镜像仓库 secret 配置， 需要提前创建该 secret
-#      volumeClaimTemplates:
-#        - metadata:
-#            name: data-volume
-#          spec:
-#            accessModes:
-#              - ReadWriteOnce
-#            resources:
-#              requests:
-#                storage: 100Gi  # 存储空间， 可修改
+      volumeClaimTemplates:
+        - metadata:
+            name: data-volume
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 20Gi  # 存储空间， 可修改
+#            storageClassName: csi-standard
 
 # the user credentials will be generated from this secret
 # once the credentials are generated, this secret is no longer required
@@ -98,12 +132,21 @@ type: Opaque
 stringData:
   password: Zhu1241jie@
 
-# Secret holding the prometheus metrics endpoint HTTP Password.
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: metrics-endpoint-password
+  name: shuaib-ref
 type: Opaque
 stringData:
-  password: promethus
+  password: Zhu1241jie@
+
+# Secret holding the prometheus metrics endpoint HTTP Password.
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: metrics-endpoint-password
+#type: Opaque
+#stringData:
+#  password: promethus

@@ -56,7 +56,7 @@ spec:
         - name: MONGODB_REPO_URL
           value: docker.io/jinchengsix
         image: docker.io/jinchengsix/mongodb-kubernetes-operator:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         name: mongodb-kubernetes-operator
         resources:
           limits:

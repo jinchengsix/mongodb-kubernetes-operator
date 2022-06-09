@@ -46,7 +46,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - rbac.authorization.k8s.io/v1
+  - rbac.authorization.k8s.io
   resources:
   - roles
   - rolebindings
@@ -54,3 +54,4 @@ rules:
   - get
   - list
   - create
+  - watch

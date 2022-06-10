@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/kube/secret"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"os"
@@ -709,8 +709,9 @@ func buildService(mdb mdbv1.MongoDBCommunity, isArbiter bool) corev1.Service {
 		name = mdb.ArbiterServiceName()
 	}
 
-	label["app"] = name
-
+	label["app.kubernetes.io/name"] = "mongodb"
+	label["app.kubernetes.io/component"] = "database"
+	label["app.kubernetes.io/instance"] = "radondb-ta586u"
 	return service.Builder().
 		SetName(name).
 		SetNamespace(mdb.Namespace).

@@ -90,15 +90,16 @@ type MongoDBStatefulSetOwner interface {
 
 	// NeedsAutomationConfigVolume returns whether the statefuslet needs to have a volume for the automationconfig.
 	NeedsAutomationConfigVolume() bool
+
+	// BuildLabel return the labels which will set into the statefulset/service of mongodb cluster
+	BuildLabel(isArbiter bool) map[string]string
 }
 
 // BuildMongoDBReplicaSetStatefulSetModificationFunction builds the parts of the replica set that are common between every resource that implements
 // MongoDBStatefulSetOwner.
 // It doesn't configure TLS or additional containers/env vars that the statefulset might need.
 func BuildMongoDBReplicaSetStatefulSetModificationFunction(mdb MongoDBStatefulSetOwner, scaler scale.ReplicaSetScaler) statefulset.Modification {
-	labels := map[string]string{
-		"app": mdb.ServiceName(),
-	}
+	labels := mdb.BuildLabel(false)
 
 	// the health status volume is required in both agent and mongod pods.
 	// the mongod requires it to determine if an upgrade is happening and needs to kill the pod

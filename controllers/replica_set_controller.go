@@ -702,21 +702,18 @@ func buildAutomationConfig(mdb mdbv1.MongoDBCommunity, auth automationconfig.Aut
 // If `isArbiter` is true, the function will create a Service suitable for the
 // Arbiter's StatefulSet.
 func buildService(mdb mdbv1.MongoDBCommunity, isArbiter bool) corev1.Service {
-	label := make(map[string]string)
-
 	name := mdb.ServiceName()
 	if isArbiter {
 		name = mdb.ArbiterServiceName()
 	}
 
-	label["app.kubernetes.io/name"] = "mongodb"
-	label["app.kubernetes.io/component"] = "database"
-	label["app.kubernetes.io/instance"] = "radondb-ta586u"
+	labels := mdb.BuildLabel(isArbiter)
+
 	return service.Builder().
 		SetName(name).
 		SetNamespace(mdb.Namespace).
-		SetSelector(label).
-		SetLabels(label).
+		SetSelector(labels).
+		SetLabels(labels).
 		SetServiceType(corev1.ServiceTypeClusterIP).
 		SetClusterIP("None").
 		SetPublishNotReadyAddresses(true).
@@ -874,6 +871,8 @@ func buildArbitersModificationFunction(mdb mdbv1.MongoDBCommunity) statefulset.M
 		statefulset.WithReplicas(mdb.StatefulSetArbitersThisReconciliation()),
 		statefulset.WithServiceName(mdb.ArbiterServiceName()),
 		statefulset.WithName(mdb.Name+"-arb"),
+		statefulset.WithLabels(mdb.BuildLabel(true)),
+		statefulset.WithMatchLabels(mdb.BuildLabel(true)),
 	)
 }
 

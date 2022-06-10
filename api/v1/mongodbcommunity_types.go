@@ -844,6 +844,21 @@ func (m MongoDBCommunity) NeedsAutomationConfigVolume() bool {
 	return true
 }
 
+func (m MongoDBCommunity) BuildLabel(isArbiter bool) map[string]string {
+	name := m.ServiceName()
+	if isArbiter {
+		name = m.ArbiterServiceName()
+	}
+
+	labels := make(map[string]string)
+	labels["app.kubernetes.io/name"] = "mongodb"
+	labels["app.kubernetes.io/component"] = "database"
+	labels["app.kubernetes.io/instance"] = m.Name
+	labels["mongodbcommunity.mongodb.com/app"] = name
+
+	return labels
+}
+
 type automationConfigReplicasScaler struct {
 	current, desired       int
 	forceIndividualScaling bool
